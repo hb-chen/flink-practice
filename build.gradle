@@ -1,0 +1,33 @@
+allprojects {
+    repositories {
+        jcenter() // this applies only to the Gradle 'Shadow' plugin
+    }
+
+    ext {
+        javaVersion = '1.8'
+        flinkVersion = '1.8.0'
+        scalaBinaryVersion = '2.11'
+        slf4jVersion = '1.7.7'
+        log4jVersion = '1.2.17'
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'application'
+
+    sourceCompatibility = javaVersion
+    targetCompatibility = javaVersion
+    tasks.withType(JavaCompile) {
+        options.encoding = 'UTF-8'
+    }
+
+    // declare where to find the dependencies of your project
+    repositories {
+        mavenCentral()
+    }
+}
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '4.10.3'
+}

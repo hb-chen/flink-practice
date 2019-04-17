@@ -1,0 +1,84 @@
+buildscript {
+    repositories {
+        jcenter() // this applies only to the Gradle 'Shadow' plugin
+    }
+    dependencies {
+        classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
+    }
+}
+
+plugins {
+    // shadow plugin to produce fat JARs
+    id 'com.github.johnrengelman.shadow' version '2.0.4'
+}
+
+// artifact properties
+archivesBaseName = 'wiki-edits'
+group = 'com.hbchen.wikiedits'
+version = '0.1'
+mainClassName = 'com.hbchen.wikiedits.WikipediaAnalysis'
+description = """Flink Wiki Edits"""
+
+applicationDefaultJvmArgs = ["-Dlog4j.configuration=log4j.properties"]
+
+// NOTE: We cannot use "compileOnly" or "shadow" configurations since then we could not run code
+// in the IDE or with "gradle run". We also cannot exclude transitive dependencies from the
+// shadowJar yet (see https://github.com/johnrengelman/shadow/issues/159).
+// -> Explicitly define the // libraries we want to be included in the "flinkShadowJar" configuration!
+configurations {
+    flinkShadowJar // dependencies which go into the shadowJar
+
+    // always exclude these (also from transitive dependencies) since they are provided by Flink
+    flinkShadowJar.exclude group: 'org.apache.flink', module: 'force-shading'
+    flinkShadowJar.exclude group: 'com.google.code.findbugs', module: 'jsr305'
+    flinkShadowJar.exclude group: 'org.slf4j'
+    flinkShadowJar.exclude group: 'log4j'
+}
+
+// declare the dependencies for your production and test code
+dependencies {
+    // --------------------------------------------------------------
+    // Compile-time dependencies that should NOT be part of the
+    // shadow jar and are provided in the lib folder of Flink
+    // --------------------------------------------------------------
+    compile "org.apache.flink:flink-java:${flinkVersion}"
+    compile "org.apache.flink:flink-streaming-java_${scalaBinaryVersion}:${flinkVersion}"
+    compile "org.apache.flink:flink-clients_${scalaBinaryVersion}:${flinkVersion}"
+
+    // --------------------------------------------------------------
+    // Dependencies that should be part of the shadow jar, e.g.
+    // connectors. These must be in the flinkShadowJar configuration!
+    // --------------------------------------------------------------
+    flinkShadowJar "org.apache.flink:flink-connector-wikiedits_${scalaBinaryVersion}:${flinkVersion}"
+    flinkShadowJar "org.apache.flink:flink-connector-kafka-0.11_${scalaBinaryVersion}:${flinkVersion}"
+
+    compile "log4j:log4j:${log4jVersion}"
+    compile "org.slf4j:slf4j-log4j12:${slf4jVersion}"
+
+    // Add test dependencies here.
+    // testCompile "junit:junit:4.12"
+}
+
+// make compileOnly dependencies available for tests:
+sourceSets {
+    main.compileClasspath += configurations.flinkShadowJar
+    main.runtimeClasspath += configurations.flinkShadowJar
+
+    test.compileClasspath += configurations.flinkShadowJar
+    test.runtimeClasspath += configurations.flinkShadowJar
+
+    javadoc.classpath += configurations.flinkShadowJar
+}
+
+run.classpath = sourceSets.main.runtimeClasspath
+
+jar {
+    manifest {
+        attributes 'Built-By': System.getProperty('user.name'),
+                'Build-Jdk': System.getProperty('java.version')
+    }
+}
+
+shadowJar {
+    configurations = [project.configurations.flinkShadowJar]
+}

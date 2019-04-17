@@ -1,0 +1,3 @@
+rootProject.name = 'flink-practice'
+
+include 'wiki-edits'
