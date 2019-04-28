@@ -1,0 +1,9 @@
+sls:
+  ak: aliyun-sls-ak
+  sk: aliyun-sls-sk
+  project: aliyun-sls-project
+  logStore: aliyun-sls-logstore
+es:
+  hostname: es-host
+  username: es-username
+  password: es-password

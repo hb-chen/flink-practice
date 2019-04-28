@@ -51,12 +51,15 @@ dependencies {
     // --------------------------------------------------------------
     flinkShadowJar "org.apache.flink:flink-connector-wikiedits_${scalaBinaryVersion}:${flinkVersion}"
     flinkShadowJar "org.apache.flink:flink-connector-kafka-0.11_${scalaBinaryVersion}:${flinkVersion}"
+    flinkShadowJar "org.apache.flink:flink-connector-elasticsearch6_${scalaBinaryVersion}:${flinkVersion}"
 
     // SLS
     flinkShadowJar "com.aliyun.openservices:flink-log-connector:0.1.7"
-    flinkShadowJar "com.google.protobuf:protobuf-java:2.5.0"
     flinkShadowJar "com.aliyun.openservices:aliyun-log:0.6.19"
     flinkShadowJar "com.aliyun.openservices:log-loghub-producer:0.1.8"
+    flinkShadowJar "com.google.protobuf:protobuf-java:2.5.0"
+
+    flinkShadowJar "org.yaml:snakeyaml:1.24"
 
     compile "log4j:log4j:${log4jVersion}"
     compile "org.slf4j:slf4j-log4j12:${slf4jVersion}"
