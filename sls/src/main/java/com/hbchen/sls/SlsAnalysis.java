@@ -49,7 +49,7 @@ public class SlsAnalysis {
         // https://help.aliyun.com/document_detail/63594.html
         Properties configProps = new Properties();
         // 设置访问日志服务的域名
-        configProps.put(ConfigConstants.LOG_ENDPOINT, "cn-hangzhou.log.aliyuncs.com");
+        configProps.put(ConfigConstants.LOG_ENDPOINT, config.getSls().getEndpoint());
         // 设置访问ak
         configProps.put(ConfigConstants.LOG_ACCESSSKEYID, config.getSls().getAk());
         configProps.put(ConfigConstants.LOG_ACCESSKEY, config.getSls().getSk());
@@ -103,21 +103,17 @@ public class SlsAnalysis {
                 for (RawLogGroup group : value.getRawLogGroups()) {
                     count += group.getLogs().size();
                     for (RawLog log : group.getLogs()) {
-                        String path = log.getContents().get("path");
-                        if (path.equalsIgnoreCase("/analysis/path")) {
+                        // URI解析
+                        QueryStringDecoder decoder = new QueryStringDecoder(log.getContents().get("uri"));
+                        String path = decoder.path();
+                        List<String> idList = decoder.parameters().get("id");
+                        if (path.equalsIgnoreCase("/analysis/path")
+                                && idList != null && idList.size() > 0) {
+                            Integer id = Optional.ofNullable(idList.get(0)).map(Integer::new).orElse(0);
                             AccessLogAnalysis ala = new AccessLogAnalysis();
-
-                            // 解析query参数
-                            QueryStringDecoder decoder = new QueryStringDecoder(log.getContents().get("uri"));
-                            List<String> idList = decoder.parameters().get("id");
-                            if (idList != null && idList.size() > 0) {
-                                Integer id = Optional.ofNullable(idList.get(0)).map(Integer::new).orElse(0);
-                                ala.setKey(id);
-                            } else {
-                                continue;
-                            }
-
+                            ala.setKey(id);
                             ala.setPath(path);
+
                             Long timestamp = Optional.ofNullable(log.getContents().get("request_time")).map(Long::new).orElse(0L);
                             timestamp *= 1000;
 

@@ -3,6 +3,7 @@ package com.hbchen.sls.config;
 public class ConfigSls {
     private String ak;
     private String sk;
+    private String endpoint;
     private String project;
     private String logStore;
 
@@ -20,6 +21,14 @@ public class ConfigSls {
 
     public void setSk(String sk) {
         this.sk = sk;
+    }
+
+    public String getEndpoint() {
+        return endpoint;
+    }
+
+    public void setEndpoint(String endpoint) {
+        this.endpoint = endpoint;
     }
 
     public String getProject() {

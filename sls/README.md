@@ -3,7 +3,16 @@
 - 实时消费SLS日志
 - 分析结果写入ES
 
-## ES创建索引
+## 假设场景
+- `SLS`日志结构
+    - `uri`
+    - `request_time`，秒级
+- 仅统计指定`path`
+    - `/analysis/path`
+    - 且`uri`的`query`参数中有内容`id`需要解析，`/analysis/path?id=1`
+- ES索引
+
+### ES创建索引
 ```json
 PUT sls_analysis
 

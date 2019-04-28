@@ -1,6 +1,7 @@
 sls:
   ak: aliyun-sls-ak
   sk: aliyun-sls-sk
+  endpoint: aliyun-sls-endpoint
   project: aliyun-sls-project
   logStore: aliyun-sls-logstore
 es:
