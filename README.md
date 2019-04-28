@@ -1,12 +1,9 @@
 # Flink Practice
 
+- 官方文档示例：[wiki-edits](/wiki-edits)
+- 实时消费阿里云`SLS`，输出到`ES`：[sls](/sls)
 
-## Build libs
-```bash
-$ ./gradlew clean wiki-edits:shadowJar
-```
-
-## Gradlew
+### Gradlew
 ```bash
 $ ./gradlew wrapper --gradle-version=4.10.3
 ``` 

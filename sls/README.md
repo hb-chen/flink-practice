@@ -1,7 +1,11 @@
-## 阿里云SLS日志分析
+# SLS日志分析
 
-- 实时消费SLS日志
-- 分析结果写入ES
+- 实时消费`SLS`日志
+- 分析结果输出到`ES`
+- 技术点
+    - 批量数据展开：`flatMap()`
+    - 自定义`EventTime`、`Watermark`：`assignTimestampsAndWatermarks()`
+    - 滚动窗口：`timeWindow()`
 
 ## 假设场景
 - `SLS`日志结构
@@ -12,8 +16,8 @@
     - 且`uri`的`query`参数中有内容`id`需要解析，`/analysis/path?id=1`
 - ES索引
 
-### ES创建索引
-```json
+### ES索引
+```bash
 PUT sls_analysis
 
 PUT sls_analysis/_mapping/_doc
@@ -33,4 +37,20 @@ PUT sls_analysis/_mapping/_doc
     }
   }
 }
+```
+
+## Run & Build
+```bash
+$ ./gradlew sls:run --args="--path /analysis/path"
+$ ./gradlew clean sls:shadowJar
+```
+
+## Submit new Job on Dashboard
+- Entry Class
+    - com.hbchen.sls.SlsAnalysis
+- Program Arguments
+    - --path /analysis/path
+    
+```bash
+GET /sls_analysis/_search
 ```

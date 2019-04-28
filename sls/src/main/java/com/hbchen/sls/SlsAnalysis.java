@@ -9,6 +9,7 @@ import com.aliyun.openservices.log.flink.data.RawLogGroupListDeserializer;
 import com.aliyun.openservices.log.flink.util.Consts;
 import org.apache.flink.api.common.functions.*;
 import org.apache.flink.api.java.tuple.Tuple4;
+import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.QueryStringDecoder;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -43,6 +44,11 @@ public class SlsAnalysis {
     private static final Logger LOG = org.apache.log4j.Logger.getLogger(SlsAnalysis.class);
 
     public static void main(String[] args) throws Exception {
+        final ParameterTool params = ParameterTool.fromArgs(args);
+        String analysisPath = params.getRequired("path");
+        String analysisQueryKey = params.get("key", "id");
+        LOG.info("access log analysis path:" + analysisPath + " key:" + analysisQueryKey);
+
         Config config = getConfig();
 
         // SLS消费
@@ -106,10 +112,9 @@ public class SlsAnalysis {
                         // URI解析
                         QueryStringDecoder decoder = new QueryStringDecoder(log.getContents().get("uri"));
                         String path = decoder.path();
-                        List<String> idList = decoder.parameters().get("id");
-                        if (path.equalsIgnoreCase("/analysis/path")
-                                && idList != null && idList.size() > 0) {
-                            Integer id = Optional.ofNullable(idList.get(0)).map(Integer::new).orElse(0);
+                        List<String> keyList = decoder.parameters().get(analysisQueryKey);
+                        if (path.equalsIgnoreCase(analysisPath) && keyList != null && keyList.size() > 0) {
+                            Integer id = Optional.ofNullable(keyList.get(0)).map(Integer::new).orElse(0);
                             AccessLogAnalysis ala = new AccessLogAnalysis();
                             ala.setKey(id);
                             ala.setPath(path);

@@ -1,9 +1,9 @@
-A Flink application project using Java and Gradle.
+# 官方文档示例wiki-edits
 
-To package your job for submission to Flink, use: 'gradle shadowJar'. Afterwards, you'll find the
-jar to use in the 'build/libs' folder.
-
-To run and test your application with an embedded instance of Flink use: 'gradle run'
+### Build libs
+```bash
+$ ./gradlew clean wiki-edits:shadowJar
+```
 
 ## Kafka
 ```bash
@@ -23,5 +23,5 @@ $ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic wiki-r
 
 ## Run
 ```bash
-$ ./bin/flink run ../wiki-edits-0.1.jar
+$ ./bin/flink run {lib-path}/wiki-edits-0.1-all.jar
 ```
