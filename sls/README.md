@@ -8,13 +8,17 @@
     - 滚动窗口：`timeWindow()`
 
 ## 假设场景
-- `SLS`日志结构
+### 日志结构
+```bash
+request_time: 1556415329
+uri: /analysis/path?id=1
+```
+- 字段
     - `uri`
     - `request_time`，秒级
-- 仅统计指定`path`
+- 筛选指定`path`
     - `/analysis/path`
-    - 且`uri`的`query`参数中有内容`id`需要解析，`/analysis/path?id=1`
-- ES索引
+    - 且`uri`的`query`参数中有内容`id`需要解析，如：`/analysis/path?id=1`
 
 ### ES索引
 ```bash
@@ -50,7 +54,38 @@ $ ./gradlew clean sls:shadowJar
     - com.hbchen.sls.SlsAnalysis
 - Program Arguments
     - --path /analysis/path
-    
+
+### 查看ES写入情况    
 ```bash
 GET /sls_analysis/_search
+```
+```json
+{
+  "took": 1,
+  "timed_out": false,
+  "_shards": {
+    "total": 5,
+    "successful": 5,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": 258,
+    "max_score": 1,
+    "hits": [
+      {
+        "_index": "sls_analysis",
+        "_type": "_doc",
+        "_id": "FKLbY2oBl_E4v-6WGwpr",
+        "_score": 1,
+        "_source": {
+          "path": "/analysis/path",
+          "count": "456",
+          "key": "123",
+          "timestamp": "1556453445000"
+        }
+      },
+    ]
+  }
+} 
 ```
