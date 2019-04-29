@@ -50,10 +50,10 @@ $ ./gradlew clean sls:shadowJar
 ```
 
 ## Submit new Job on Dashboard
-- Entry Class
-    - com.hbchen.sls.SlsAnalysis
-- Program Arguments
-    - --path /analysis/path
+- `Entry Class`
+    - `com.hbchen.sls.SlsAnalysis`
+- `Program Arguments`
+    - `--path /analysis/path`
 
 ### 查看ES写入情况    
 ```bash

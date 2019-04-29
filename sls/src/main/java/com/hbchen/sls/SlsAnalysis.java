@@ -1,16 +1,9 @@
 package com.hbchen.sls;
 
-import com.aliyun.openservices.log.flink.ConfigConstants;
-import com.aliyun.openservices.log.flink.FlinkLogConsumer;
-import com.aliyun.openservices.log.flink.data.RawLog;
-import com.aliyun.openservices.log.flink.data.RawLogGroup;
-import com.aliyun.openservices.log.flink.data.RawLogGroupList;
-import com.aliyun.openservices.log.flink.data.RawLogGroupListDeserializer;
-import com.aliyun.openservices.log.flink.util.Consts;
-import org.apache.flink.api.common.functions.*;
+import org.apache.flink.api.common.functions.FlatMapFunction;
+import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.api.java.utils.ParameterTool;
-import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.QueryStringDecoder;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -22,6 +15,16 @@ import org.apache.flink.streaming.connectors.elasticsearch.ElasticsearchSinkFunc
 import org.apache.flink.streaming.connectors.elasticsearch.RequestIndexer;
 import org.apache.flink.streaming.connectors.elasticsearch6.ElasticsearchSink;
 import org.apache.flink.util.Collector;
+
+import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.QueryStringDecoder;
+
+import com.aliyun.openservices.log.flink.ConfigConstants;
+import com.aliyun.openservices.log.flink.FlinkLogConsumer;
+import com.aliyun.openservices.log.flink.data.RawLog;
+import com.aliyun.openservices.log.flink.data.RawLogGroup;
+import com.aliyun.openservices.log.flink.data.RawLogGroupList;
+import com.aliyun.openservices.log.flink.data.RawLogGroupListDeserializer;
+import com.aliyun.openservices.log.flink.util.Consts;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
@@ -34,200 +37,195 @@ import org.elasticsearch.client.Requests;
 import org.elasticsearch.client.RestClientBuilder;
 import org.yaml.snakeyaml.constructor.Constructor;
 
-import java.util.*;
 import javax.annotation.Nullable;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
 
 import com.hbchen.sls.config.Config;
 import com.hbchen.sls.util.AccessLogAnalysis;
 
+/**
+ * SLS日志分析.
+ */
 public class SlsAnalysis {
-    private static final Logger LOG = org.apache.log4j.Logger.getLogger(SlsAnalysis.class);
 
-    public static void main(String[] args) throws Exception {
-        final ParameterTool params = ParameterTool.fromArgs(args);
-        String analysisPath = params.getRequired("path");
-        String analysisQueryKey = params.get("key", "id");
-        LOG.info("access log analysis path:" + analysisPath + " key:" + analysisQueryKey);
+	private static final Logger LOG = org.apache.log4j.Logger.getLogger(SlsAnalysis.class);
 
-        Config config = getConfig();
+	public static void main(String[] args) throws Exception {
+		final ParameterTool params = ParameterTool.fromArgs(args);
+		String analysisPath = params.getRequired("path");
+		String analysisQueryKey = params.get("key", "id");
+		LOG.info("access log analysis path:" + analysisPath + " key:" + analysisQueryKey);
 
-        // SLS消费
-        // https://help.aliyun.com/document_detail/63594.html
-        Properties configProps = new Properties();
-        // 设置访问日志服务的域名
-        configProps.put(ConfigConstants.LOG_ENDPOINT, config.getSls().getEndpoint());
-        // 设置访问ak
-        configProps.put(ConfigConstants.LOG_ACCESSSKEYID, config.getSls().getAk());
-        configProps.put(ConfigConstants.LOG_ACCESSKEY, config.getSls().getSk());
-        // 设置日志服务的project
-        configProps.put(ConfigConstants.LOG_PROJECT, config.getSls().getProject());
-        // 设置日志服务的Logstore
-        configProps.put(ConfigConstants.LOG_LOGSTORE, config.getSls().getLogStore());
-        // 设置消费日志服务起始位置
-        // Consts.LOG_BEGIN_CURSOR： 表示从shard的头开始消费，也就是从shard中最旧的数据开始消费。
-        // Consts.LOG_END_CURSOR： 表示从shard的尾开始，也就是从shard中最新的数据开始消费。
-        // Consts.LOG_FROM_CHECKPOINT：表示从某个特定的ConsumerGroup中保存的Checkpoint开始消费，通过ConfigConstants.LOG_CONSUMERGROUP指定具体的ConsumerGroup。
-        // UnixTimestamp： 一个整型数值的字符串，用1970-01-01到现在的秒数表示， 含义是消费shard中这个时间点之后的数据。
-        configProps.put(ConfigConstants.LOG_CONSUMER_BEGIN_POSITION, "" + (System.currentTimeMillis() / 1000L));
-        // 设置日志拉取时间间隔及每次调用拉取的日志数量
-        configProps.put(ConfigConstants.LOG_FETCH_DATA_INTERVAL_MILLIS, "1000");
-        configProps.put(ConfigConstants.LOG_MAX_NUMBER_PER_FETCH, "100");
-        // 设置Shards发现周期
-        configProps.put(ConfigConstants.LOG_SHARDS_DISCOVERY_INTERVAL_MILLIS, Consts.DEFAULT_SHARDS_DISCOVERY_INTERVAL_MILLIS);
+		Config config = getConfig();
 
-        // 设置日志服务的消息反序列化方法
-        RawLogGroupListDeserializer deserializer = new RawLogGroupListDeserializer();
-        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        DataStream<RawLogGroupList> logStream = env.addSource(
-                new FlinkLogConsumer<RawLogGroupList>(deserializer, configProps));
+		// SLS消费
+		// https://help.aliyun.com/document_detail/63594.html
+		Properties configProps = new Properties();
+		// 设置访问日志服务的域名
+		configProps.put(ConfigConstants.LOG_ENDPOINT, config.getSls().getEndpoint());
+		// 设置访问ak
+		configProps.put(ConfigConstants.LOG_ACCESSSKEYID, config.getSls().getAk());
+		configProps.put(ConfigConstants.LOG_ACCESSKEY, config.getSls().getSk());
+		// 设置日志服务的project
+		configProps.put(ConfigConstants.LOG_PROJECT, config.getSls().getProject());
+		// 设置日志服务的Logstore
+		configProps.put(ConfigConstants.LOG_LOGSTORE, config.getSls().getLogStore());
+		// 设置消费日志服务起始位置
+		// Consts.LOG_BEGIN_CURSOR： 表示从shard的头开始消费，也就是从shard中最旧的数据开始消费。
+		// Consts.LOG_END_CURSOR： 表示从shard的尾开始，也就是从shard中最新的数据开始消费。
+		// Consts.LOG_FROM_CHECKPOINT：表示从某个特定的ConsumerGroup中保存的Checkpoint开始消费，通过ConfigConstants.LOG_CONSUMERGROUP指定具体的ConsumerGroup。
+		// UnixTimestamp： 一个整型数值的字符串，用1970-01-01到现在的秒数表示， 含义是消费shard中这个时间点之后的数据。
+		configProps.put(ConfigConstants.LOG_CONSUMER_BEGIN_POSITION, "" + (System.currentTimeMillis() / 1000L));
+		// 设置日志拉取时间间隔及每次调用拉取的日志数量
+		configProps.put(ConfigConstants.LOG_FETCH_DATA_INTERVAL_MILLIS, "1000");
+		configProps.put(ConfigConstants.LOG_MAX_NUMBER_PER_FETCH, "100");
+		// 设置Shards发现周期
+		configProps.put(ConfigConstants.LOG_SHARDS_DISCOVERY_INTERVAL_MILLIS, Consts.DEFAULT_SHARDS_DISCOVERY_INTERVAL_MILLIS);
 
-        // Event Time
-        env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+		// 设置日志服务的消息反序列化方法
+		RawLogGroupListDeserializer deserializer = new RawLogGroupListDeserializer();
+		final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+		DataStream<RawLogGroupList> logStream = env.addSource(new FlinkLogConsumer<RawLogGroupList>(deserializer, configProps));
 
-        // 开启flink exactly once语义
-        // env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
-        // 每5s保存一次checkpoint
-        // env.enableCheckpointing(5000);
+		// Event Time
+		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
-        // SLS批量日志展开
-        DataStream<Tuple4<AccessLogAnalysis, Integer, Long, Long>> flatStream = logStream.flatMap(new FlatMapFunction<RawLogGroupList, Tuple4<AccessLogAnalysis, Integer, Long, Long>>() {
-            @Override
-            public void flatMap(RawLogGroupList value, Collector<Tuple4<AccessLogAnalysis, Integer, Long, Long>> out) throws Exception {
-                // Log group内时间升序，记录所有分组最小时间戳，即为watermark位置
-                long minTimestamp = Long.MAX_VALUE;
-                for (RawLogGroup group : value.getRawLogGroups()) {
-                    if (group.getLogs().size() > 0) {
-                        RawLog log = group.getLogs().get(0);
-                        long rt = Optional.ofNullable(log.getContents().get("request_time")).map(Long::new).orElse(Long.MAX_VALUE);
-                        minTimestamp = rt < minTimestamp ? rt : minTimestamp;
-                    }
-                }
-                // 取毫秒，排除MAX_VALUE
-                minTimestamp = minTimestamp == Long.MAX_VALUE ? minTimestamp : minTimestamp * 1000;
+		// 开启flink exactly once语义
+		// env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+		// 每5s保存一次checkpoint
+		// env.enableCheckpointing(5000);
 
-                Integer count = 0;
-                for (RawLogGroup group : value.getRawLogGroups()) {
-                    count += group.getLogs().size();
-                    for (RawLog log : group.getLogs()) {
-                        // URI解析
-                        QueryStringDecoder decoder = new QueryStringDecoder(log.getContents().get("uri"));
-                        String path = decoder.path();
-                        List<String> keyList = decoder.parameters().get(analysisQueryKey);
-                        if (path.equalsIgnoreCase(analysisPath) && keyList != null && keyList.size() > 0) {
-                            Integer id = Optional.ofNullable(keyList.get(0)).map(Integer::new).orElse(0);
-                            AccessLogAnalysis ala = new AccessLogAnalysis();
-                            ala.setKey(id);
-                            ala.setPath(path);
+		// SLS批量日志展开
+		DataStream<Tuple4<AccessLogAnalysis, Integer, Long, Long>> flatStream = logStream.flatMap(new FlatMapFunction<RawLogGroupList, Tuple4<AccessLogAnalysis, Integer, Long, Long>>() {
+			@Override
+			public void flatMap(RawLogGroupList value, Collector<Tuple4<AccessLogAnalysis, Integer, Long, Long>> out) throws Exception {
+				// Log group内时间升序，记录所有分组最小时间戳，即为watermark位置
+				long minTimestamp = Long.MAX_VALUE;
+				for (RawLogGroup group : value.getRawLogGroups()) {
+					if (group.getLogs().size() > 0) {
+						RawLog log = group.getLogs().get(0);
+						long rt = Optional.ofNullable(log.getContents().get("request_time")).map(Long::new).orElse(Long.MAX_VALUE);
+						minTimestamp = rt < minTimestamp ? rt : minTimestamp;
+					}
+				}
+				// 取毫秒，排除MAX_VALUE
+				minTimestamp = minTimestamp == Long.MAX_VALUE ? minTimestamp : minTimestamp * 1000;
 
-                            Long timestamp = Optional.ofNullable(log.getContents().get("request_time")).map(Long::new).orElse(0L);
-                            timestamp *= 1000;
+				Integer count = 0;
+				for (RawLogGroup group : value.getRawLogGroups()) {
+					count += group.getLogs().size();
+					for (RawLog log : group.getLogs()) {
+						// URI解析
+						QueryStringDecoder decoder = new QueryStringDecoder(log.getContents().get("uri"));
+						String path = decoder.path();
+						List<String> keyList = decoder.parameters().get(analysisQueryKey);
+						if (path.equalsIgnoreCase(analysisPath) && keyList != null && keyList.size() > 0) {
+							Integer id = Optional.ofNullable(keyList.get(0)).map(Integer::new).orElse(0);
+							AccessLogAnalysis ala = new AccessLogAnalysis();
+							ala.setKey(id);
+							ala.setPath(path);
 
-                            out.collect(new Tuple4<>(ala, 1, timestamp, minTimestamp));
-                        }
+							Long timestamp = Optional.ofNullable(log.getContents().get("request_time")).map(Long::new).orElse(0L);
+							timestamp *= 1000;
 
-                    }
-                }
-                LOG.info("raw log count:" + count
-                        + " timestamp:" + minTimestamp);
-            }
-        });
+							out.collect(new Tuple4<>(ala, 1, timestamp, minTimestamp));
+						}
 
-        DataStream result = flatStream.assignTimestampsAndWatermarks(new AssignerWithPunctuatedWatermarks<Tuple4<AccessLogAnalysis, Integer, Long, Long>>() {
-            @Nullable
-            @Override
-            public Watermark checkAndGetNextWatermark(Tuple4<AccessLogAnalysis, Integer, Long, Long> lastElement, long extractedTimestamp) {
-                return lastElement.f3 <= extractedTimestamp ? new Watermark(lastElement.f3) : null;
-            }
+					}
+				}
+				LOG.info("raw log count:" + count + " timestamp:" + minTimestamp);
+			}
+		});
 
-            @Override
-            public long extractTimestamp(Tuple4<AccessLogAnalysis, Integer, Long, Long> element, long previousElementTimestamp) {
-                if (element.f2 > 0L) {
-                    return element.f2;
-                } else {
-                    return previousElementTimestamp;
-                }
-            }
-        })
-                .keyBy(0)
-                .timeWindow(Time.seconds(60))
-                .sum(1);
+		DataStream result = flatStream.assignTimestampsAndWatermarks(new AssignerWithPunctuatedWatermarks<Tuple4<AccessLogAnalysis, Integer, Long, Long>>() {
+			@Nullable
+			@Override
+			public Watermark checkAndGetNextWatermark(Tuple4<AccessLogAnalysis, Integer, Long, Long> lastElement, long extractedTimestamp) {
+				return lastElement.f3 <= extractedTimestamp ? new Watermark(lastElement.f3) : null;
+			}
 
-        if (false) {
-            result.print();
-            result.addSink(new SinkFunction<Tuple4<AccessLogAnalysis, Integer, Long, Long>>() {
-                @Override
-                public void invoke(Tuple4<AccessLogAnalysis, Integer, Long, Long> value, Context context) throws Exception {
-                    LOG.info("path:" + value.f0.getPath()
-                            + " count:" + value.f1
-                            + " timestamp" + value.f2
-                            + " ctx.timestamp:" + context.timestamp()
-                            + " ctx.watermark:" + context.currentWatermark());
-                }
-            });
-        } else {
-            // Sink:Elasticsearch
-            List<HttpHost> httpHosts = new ArrayList<>();
-            httpHosts.add(new HttpHost(config.getEs().getHostname(), 9200, "http"));
+			@Override
+			public long extractTimestamp(Tuple4<AccessLogAnalysis, Integer, Long, Long> element, long previousElementTimestamp) {
+				if (element.f2 > 0L) {
+					return element.f2;
+				} else {
+					return previousElementTimestamp;
+				}
+			}
+		})
+				.keyBy(0)
+				.timeWindow(Time.seconds(60))
+				.sum(1);
 
-            // use a ElasticsearchSink.Builder to create an ElasticsearchSink
-            ElasticsearchSink.Builder<Tuple4<AccessLogAnalysis, Integer, Long, Long>> esSinkBuilder = new ElasticsearchSink.Builder<>(
-                    httpHosts,
-                    new ElasticsearchSinkFunction<Tuple4<AccessLogAnalysis, Integer, Long, Long>>() {
-                        public IndexRequest createIndexRequest(Tuple4<AccessLogAnalysis, Integer, Long, Long> element) {
-                            Map<String, String> json = new HashMap<>();
-                            json.put("path", element.f0.getPath());
-                            json.put("key", element.f0.getKey().toString());
-                            json.put("count", element.f1.toString());
-                            json.put("timestamp", element.f3.toString());
+		if (false) {
+			result.print();
+			result.addSink(new SinkFunction<Tuple4<AccessLogAnalysis, Integer, Long, Long>>() {
+				@Override
+				public void invoke(Tuple4<AccessLogAnalysis, Integer, Long, Long> value, Context context) throws Exception {
+					LOG.info("path:" + value.f0.getPath() + " count:" + value.f1 + " timestamp" + value.f2 + " ctx.timestamp:" + context.timestamp() + " ctx.watermark:" + context.currentWatermark());
+				}
+			});
+		} else {
+			// Sink:Elasticsearch
+			List<HttpHost> httpHosts = new ArrayList<>();
+			httpHosts.add(new HttpHost(config.getEs().getHostname(), 9200, "http"));
 
-                            return Requests.indexRequest()
-                                    .index("sls_analysis")
-                                    .type("_doc")
-                                    .source(json);
-                        }
+			// use a ElasticsearchSink.Builder to create an ElasticsearchSink
+			ElasticsearchSink.Builder<Tuple4<AccessLogAnalysis, Integer, Long, Long>> esSinkBuilder = new ElasticsearchSink.Builder<>(httpHosts, new ElasticsearchSinkFunction<Tuple4<AccessLogAnalysis, Integer, Long, Long>>() {
+				public IndexRequest createIndexRequest(Tuple4<AccessLogAnalysis, Integer, Long, Long> element) {
+					Map<String, String> json = new HashMap<>();
+					json.put("path", element.f0.getPath());
+					json.put("key", element.f0.getKey().toString());
+					json.put("count", element.f1.toString());
+					json.put("timestamp", element.f3.toString());
 
-                        @Override
-                        public void process(Tuple4<AccessLogAnalysis, Integer, Long, Long> element, RuntimeContext runtimeContext, RequestIndexer requestIndexer) {
-                            requestIndexer.add(createIndexRequest(element));
-                        }
-                    }
-            );
+					return Requests.indexRequest().index("sls_analysis").type("_doc").source(json);
+				}
 
-            // configuration for the bulk requests; this instructs the sink to emit after every element, otherwise they would be buffered
-            esSinkBuilder.setBulkFlushMaxActions(1);
+				@Override
+				public void process(Tuple4<AccessLogAnalysis, Integer, Long, Long> element, RuntimeContext runtimeContext, RequestIndexer requestIndexer) {
+					requestIndexer.add(createIndexRequest(element));
+				}
+			});
 
-            // provide a RestClientFactory for custom configuration on the internally created REST client
-            String esUsername = config.getEs().getUsername();
-            String esPassword = config.getEs().getPassword();
-            esSinkBuilder.setRestClientFactory(
-                    restClientBuilder -> {
-                        // restClientBuilder.setDefaultHeaders(headers);
-                        // restClientBuilder.setMaxRetryTimeoutMillis(...)
-                        // restClientBuilder.setPathPrefix(...)
-                        restClientBuilder.setHttpClientConfigCallback(new RestClientBuilder.HttpClientConfigCallback() {
-                            @Override
-                            public HttpAsyncClientBuilder customizeHttpClient(HttpAsyncClientBuilder httpAsyncClientBuilder) {
-                                CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
-                                credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(esUsername, esPassword));
-                                return httpAsyncClientBuilder
-                                        .setDefaultCredentialsProvider(credentialsProvider);
-                            }
-                        });
-                    }
-            );
+			// configuration for the bulk requests; this instructs the sink to emit after every element, otherwise they would be buffered
+			esSinkBuilder.setBulkFlushMaxActions(1);
 
-            // finally, build and add the sink to the job's pipeline
-            result.addSink(esSinkBuilder.build());
-        }
+			// provide a RestClientFactory for custom configuration on the internally created REST client
+			String esUsername = config.getEs().getUsername();
+			String esPassword = config.getEs().getPassword();
+			esSinkBuilder.setRestClientFactory(restClientBuilder -> {
+				// restClientBuilder.setDefaultHeaders(headers);
+				// restClientBuilder.setMaxRetryTimeoutMillis(...)
+				// restClientBuilder.setPathPrefix(...)
+				restClientBuilder.setHttpClientConfigCallback(new RestClientBuilder.HttpClientConfigCallback() {
+					@Override
+					public HttpAsyncClientBuilder customizeHttpClient(HttpAsyncClientBuilder httpAsyncClientBuilder) {
+						CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+						credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(config.getEs().getUsername(), esPassword));
+						return httpAsyncClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
+					}
+				});
+			});
 
-        env.execute();
-    }
+			// finally, build and add the sink to the job's pipeline
+			result.addSink(esSinkBuilder.build());
+		}
 
-    private static Config getConfig() {
-        Constructor constructor = new Constructor(Config.class);
-        org.yaml.snakeyaml.Yaml yaml = new org.yaml.snakeyaml.Yaml(constructor);
+		env.execute();
+	}
 
-        Config config = yaml.loadAs(SlsAnalysis.class.getClassLoader().getResourceAsStream("config.yml"), Config.class);
-        return config;
-    }
+	private static Config getConfig() {
+		Constructor constructor = new Constructor(Config.class);
+		org.yaml.snakeyaml.Yaml yaml = new org.yaml.snakeyaml.Yaml(constructor);
+
+		Config config = yaml.loadAs(SlsAnalysis.class.getClassLoader().getResourceAsStream("config.yml"), Config.class);
+		return config;
+	}
 }
