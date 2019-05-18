@@ -4,8 +4,10 @@ import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.AssignerWithPunctuatedWatermarks;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
@@ -51,6 +53,8 @@ import com.hbchen.sls.util.AccessLogAnalysis;
 
 /**
  * SLS日志分析.
+ *
+ * @author hbchen.com
  */
 public class SlsAnalysis {
 
@@ -81,7 +85,9 @@ public class SlsAnalysis {
 		// Consts.LOG_END_CURSOR： 表示从shard的尾开始，也就是从shard中最新的数据开始消费。
 		// Consts.LOG_FROM_CHECKPOINT：表示从某个特定的ConsumerGroup中保存的Checkpoint开始消费，通过ConfigConstants.LOG_CONSUMERGROUP指定具体的ConsumerGroup。
 		// UnixTimestamp： 一个整型数值的字符串，用1970-01-01到现在的秒数表示， 含义是消费shard中这个时间点之后的数据。
-		configProps.put(ConfigConstants.LOG_CONSUMER_BEGIN_POSITION, "" + (System.currentTimeMillis() / 1000L));
+		// configProps.put(ConfigConstants.LOG_CONSUMER_BEGIN_POSITION, "" + (System.currentTimeMillis() / 1000L));
+		configProps.put(ConfigConstants.LOG_CONSUMER_BEGIN_POSITION, Consts.LOG_FROM_CHECKPOINT);
+		configProps.put(ConfigConstants.LOG_CONSUMERGROUP, "sls-analysis");
 		// 设置日志拉取时间间隔及每次调用拉取的日志数量
 		configProps.put(ConfigConstants.LOG_FETCH_DATA_INTERVAL_MILLIS, "1000");
 		configProps.put(ConfigConstants.LOG_MAX_NUMBER_PER_FETCH, "100");
@@ -97,9 +103,11 @@ public class SlsAnalysis {
 		env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
 		// 开启flink exactly once语义
-		// env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+		env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
 		// 每5s保存一次checkpoint
-		// env.enableCheckpointing(5000);
+		env.enableCheckpointing(5000);
+		// 作业Cancel是否删除CheckPoint
+		env.getCheckpointConfig().enableExternalizedCheckpoints(CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
 
 		// SLS批量日志展开
 		DataStream<Tuple4<AccessLogAnalysis, Integer, Long, Long>> flatStream = logStream.flatMap(new FlatMapFunction<RawLogGroupList, Tuple4<AccessLogAnalysis, Integer, Long, Long>>() {
@@ -158,10 +166,7 @@ public class SlsAnalysis {
 					return previousElementTimestamp;
 				}
 			}
-		})
-				.keyBy(0)
-				.timeWindow(Time.seconds(60))
-				.sum(1);
+		}).keyBy(0).timeWindow(Time.seconds(60)).sum(1);
 
 		if (false) {
 			result.print();
@@ -208,7 +213,7 @@ public class SlsAnalysis {
 					@Override
 					public HttpAsyncClientBuilder customizeHttpClient(HttpAsyncClientBuilder httpAsyncClientBuilder) {
 						CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
-						credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(config.getEs().getUsername(), esPassword));
+						credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(esUsername, esPassword));
 						return httpAsyncClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
 					}
 				});
@@ -221,7 +226,7 @@ public class SlsAnalysis {
 		env.execute();
 	}
 
-	private static Config getConfig() {
+	public static Config getConfig() {
 		Constructor constructor = new Constructor(Config.class);
 		org.yaml.snakeyaml.Yaml yaml = new org.yaml.snakeyaml.Yaml(constructor);
 
