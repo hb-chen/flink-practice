@@ -50,8 +50,7 @@ public class ConsumerGroup {
 		long timestamp = Timestamp.valueOf("2019-05-18 00:00:00").getTime() / 1000;
 		ListShardResponse response = client.ListShard(new ListShardRequest(project, logStore));
 		for (Shard shard : response.GetShards()) {
-			int shardId = 15;
-			shard.GetShardId();
+			int shardId = shard.GetShardId();
 			LOG.info("shared id: " + shardId);
 			String cursor = client.GetCursor(project, logStore, shardId, timestamp).GetCursor();
 			client.UpdateCheckPoint(project, logStore, consumerGroup, shardId, cursor);
